@@ -58,34 +58,6 @@ async function initializeApp() {
     
     // Load user preferences
     loadPreferences();
-    
-    // Set up periodic check for new JSON files (every 10 seconds)
-    setInterval(checkForNewJsonFiles, 10000);
-}
-
-// Check for new JSON files
-async function checkForNewJsonFiles() {
-    // Store the current exam IDs
-    const currentExamIds = availableExams.map(exam => exam.id);
-    
-    // Try to load any new exams
-    await loadAvailableExams();
-    
-    // Check if any new exams were found
-    const newExams = availableExams.filter(exam => !currentExamIds.includes(exam.id));
-    
-    if (newExams.length > 0) {
-        console.log(`Found ${newExams.length} new exam(s):`);
-        newExams.forEach(exam => console.log(`- ${exam.name}`));
-        
-        // If the user is on the start screen, update the selected exam count
-        if (!startScreenElement.classList.contains('hidden')) {
-            const selectedExamId = examSelectElement.value;
-            if (selectedExamId) {
-                updateQuestionCountForExam(selectedExamId);
-            }
-        }
-    }
 }
 
 // Load available exams from json_files directory
@@ -98,41 +70,6 @@ async function loadAvailableExams() {
         if (indexResponse.ok) {
             const indexData = await indexResponse.json();
             jsonFiles = indexData.files || [];
-        }
-        
-        // Additionally, try to discover new files that might not be in the index yet
-        // We'll use a pattern-based approach to check for common file names
-        const potentialFiles = [];
-        
-        // Check for files with pattern: N.*.json where N is a number
-        for (let i = 1; i <= 30; i++) {
-            // Try various naming patterns
-            potentialFiles.push(`${i}.json`);
-            potentialFiles.push(`${i}.exam_${i}.json`);
-            potentialFiles.push(`${i}.test_${i}.json`);
-            potentialFiles.push(`exam_${i}.json`);
-            potentialFiles.push(`test_${i}.json`);
-            potentialFiles.push(`questions_${i}.json`);
-        }
-        
-        // Also try some common names
-        potentialFiles.push('questions.json');
-        potentialFiles.push('exams.json');
-        potentialFiles.push('tests.json');
-        potentialFiles.push('data.json');
-        
-        // Try to fetch each potential file and add it to jsonFiles if it exists
-        for (const potentialFile of potentialFiles) {
-            if (!jsonFiles.includes(potentialFile)) {
-                try {
-                    const testResponse = await fetch(`json_files/${potentialFile}`);
-                    if (testResponse.ok) {
-                        jsonFiles.push(potentialFile);
-                    }
-                } catch (e) {
-                    // Ignore errors for files that don't exist
-                }
-            }
         }
         
         // Also try to discover any JSON file in the directory by checking the directory listing
