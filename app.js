@@ -58,6 +58,18 @@ async function initializeApp() {
     
     // Load user preferences
     loadPreferences();
+    
+    // Initialize the slider value display
+    updateSliderValueDisplay();
+    
+    // Initialize the slider background
+    updateSliderBackground();
+    
+    // Check if mobile and hide menu-stats if needed
+    checkMobileAndHideStats();
+    
+    // Add resize event listener to handle window size changes
+    window.addEventListener('resize', checkMobileAndHideStats);
 }
 
 // Load available exams from json_files directory
@@ -171,45 +183,75 @@ function updateQuestionCountForExam(examId) {
     if (selectedExam && selectedExam.questions) {
         const questionCount = selectedExam.questions.length;
         
-        // Update the total available questions display
-        const totalAvailableQuestions = document.getElementById('total-available-questions');
-        if (totalAvailableQuestions) {
-            totalAvailableQuestions.textContent = questionCount;
-        }
-        
         // Update the question count input
         if (questionCountElement) {
             questionCountElement.max = questionCount;
             
-            // If the current value is greater than the new max, update it
-            if (parseInt(questionCountElement.value) > questionCount) {
-                questionCountElement.value = questionCount;
-            }
+            // Always set the value to 5 when changing exams
+            questionCountElement.value = Math.min(5, questionCount);
             
             // Update the selected question count
             selectedQuestionCount = parseInt(questionCountElement.value);
+            
+            // Update the slider value display
+            updateSliderValueDisplay();
+            
+            // Update the slider position
+            updateSliderValuePosition();
+            
+            // Update the max label
+            const sliderMaxLabel = document.getElementById('slider-max-label');
+            if (sliderMaxLabel) {
+                sliderMaxLabel.textContent = questionCount;
+            }
+            
+            // Update slider background
+            updateSliderBackground();
         }
     }
 }
 
-// Update the question count input based on sample questions
-function updateQuestionCountForSampleQuestions() {
-    if (typeof sampleQuestions !== 'undefined') {
-        const questionCount = sampleQuestions.length;
-        
-        // Update the total available questions display
-        const totalAvailableQuestions = document.getElementById('total-available-questions');
-        if (totalAvailableQuestions) {
-            totalAvailableQuestions.textContent = questionCount;
-        }
-        
-        // Update the question count input
-        if (questionCountElement) {
-            questionCountElement.max = questionCount;
-            questionCountElement.value = questionCount;
-            selectedQuestionCount = questionCount;
-        }
+// Update the slider value display and position
+function updateSliderValueDisplay() {
+    const sliderValue = document.getElementById('question-count-value');
+    if (sliderValue) {
+        sliderValue.textContent = questionCountElement.value;
+        updateSliderValuePosition();
     }
+    
+    // Update slider background gradient
+    updateSliderBackground();
+}
+
+// Update the position of the slider value display
+function updateSliderValuePosition() {
+    const sliderValue = document.getElementById('question-count-value');
+    const sliderThumbWrapper = document.querySelector('.slider-thumb-wrapper');
+    
+    if (sliderValue && sliderThumbWrapper && questionCountElement) {
+        const min = parseInt(questionCountElement.min);
+        const max = parseInt(questionCountElement.max);
+        const value = parseInt(questionCountElement.value);
+        
+        // Calculate the percentage position
+        const percentage = ((value - min) / (max - min)) * 100;
+        
+        // Update the position of the slider thumb wrapper
+        sliderThumbWrapper.style.right = `${percentage}%`;
+    }
+}
+
+// Update the slider background gradient based on the current value
+function updateSliderBackground() {
+    const min = parseInt(questionCountElement.min) || 1;
+    const max = parseInt(questionCountElement.max) || 100;
+    const value = parseInt(questionCountElement.value) || min;
+    
+    // Calculate the percentage position
+    const percentage = ((value - min) / (max - min)) * 100;
+    
+    // Update the background gradient with purple color
+    questionCountElement.style.background = `linear-gradient(to left, #8b5cf6 0%, #8b5cf6 ${percentage}%, #e2e8f0 ${percentage}%, #e2e8f0 100%)`;
 }
 
 // Set up event listeners
@@ -226,7 +268,7 @@ function setupEventListeners() {
     });
     
     // Add event listener for question count input
-    questionCountElement.addEventListener('change', function() {
+    questionCountElement.addEventListener('input', function() {
         // Ensure the value is within the min and max range
         const min = parseInt(this.min) || 1;
         const max = parseInt(this.max) || 100;
@@ -238,7 +280,45 @@ function setupEventListeners() {
         // Update the input value and selected question count
         this.value = value;
         selectedQuestionCount = value;
+        
+        // Update the slider value display
+        updateSliderValueDisplay();
     });
+    
+    // Add event listeners for hover effects
+    questionCountElement.addEventListener('mouseover', function() {
+        const sliderValue = document.getElementById('question-count-value');
+        if (sliderValue) {
+            sliderValue.style.opacity = '1';
+        }
+    });
+    
+    questionCountElement.addEventListener('mouseout', function() {
+        const sliderValue = document.getElementById('question-count-value');
+        if (sliderValue) {
+            sliderValue.style.opacity = '0';
+        }
+    });
+    
+    // Add event listener for touch devices
+    questionCountElement.addEventListener('touchstart', function() {
+        const sliderValue = document.getElementById('question-count-value');
+        if (sliderValue) {
+            sliderValue.style.opacity = '1';
+        }
+    }, { passive: true });
+    
+    questionCountElement.addEventListener('touchend', function() {
+        const sliderValue = document.getElementById('question-count-value');
+        if (sliderValue) {
+            setTimeout(() => {
+                sliderValue.style.opacity = '0';
+            }, 1000);
+        }
+    }, { passive: true });
+    
+    // Initialize the slider on page load
+    updateSliderBackground();
     
     // Quiz navigation
     nextButton.addEventListener('click', nextQuestion);
@@ -309,15 +389,7 @@ function displayQuestion() {
     // Update progress bar
     updateProgressBar();
     
-    // Display question number and text
-    const questionNumberElement = document.getElementById('question-number');
-    if (currentQuestion.questionNumber) {
-        questionNumberElement.textContent = currentQuestion.questionNumber;
-    } else {
-        questionNumberElement.textContent = currentQuestionIndex + 1;
-    }
-    
-    // Display question text
+    // Display question text with question number
     const questionNum = currentQuestion.questionNumber ? currentQuestion.questionNumber : (currentQuestionIndex + 1);
     questionTextElement.textContent = `${questionNum}. ${currentQuestion.question}`;
     
@@ -357,10 +429,17 @@ function displayQuestion() {
     
     // Show feedback if question was answered
     if (userAnswers[currentQuestionIndex] !== null) {
-        feedbackContainerElement.classList.remove('hidden');
         const isCorrect = userAnswers[currentQuestionIndex] === currentQuestion.correctIndex;
-        feedbackTextElement.textContent = isCorrect ? 'נכון!' : 'לא נכון!';
-        explanationTextElement.textContent = currentQuestion.explanation;
+        
+        if (isCorrect) {
+            // Hide feedback container completely for correct answers
+            feedbackContainerElement.classList.add('hidden');
+        } else {
+            // Show feedback only for incorrect answers
+            feedbackContainerElement.classList.remove('hidden');
+            feedbackTextElement.textContent = 'לא נכון!';
+            explanationTextElement.textContent = currentQuestion.explanation;
+        }
     } else {
         feedbackTextElement.textContent = '';
         explanationTextElement.textContent = '';
@@ -399,10 +478,14 @@ function submitAnswer() {
     const currentQuestion = questions[currentQuestionIndex];
     const isCorrect = selectedOptionIndex === currentQuestion.correctIndex;
     
-    // Show feedback in container instead of modal
-    feedbackContainerElement.classList.remove('hidden');
-    feedbackTextElement.textContent = isCorrect ? 'נכון!' : 'לא נכון!';
-    explanationTextElement.textContent = currentQuestion.explanation;
+    // Show feedback only for incorrect answers
+    if (isCorrect) {
+        feedbackContainerElement.classList.add('hidden');
+    } else {
+        feedbackContainerElement.classList.remove('hidden');
+        feedbackTextElement.textContent = 'לא נכון!';
+        explanationTextElement.textContent = currentQuestion.explanation;
+    }
     
     // Highlight correct and incorrect options
     const options = optionsContainerElement.querySelectorAll('.option');
@@ -475,6 +558,10 @@ function startQuiz() {
     
     // Get selected exam ID
     const selectedExamId = examSelectElement.value;
+    
+    // Hide quiz title and show stats display
+    document.getElementById('quiz-title').classList.add('hidden');
+    document.getElementById('stats-display').classList.remove('hidden');
     
     if (selectedExamId === 'sample-questions') {
         // Use sample questions if available
@@ -552,7 +639,11 @@ function showSummary() {
     // Update summary screen
     summaryTotalElement.textContent = totalQuestions;
     summaryCorrectElement.textContent = correctAnswers;
-    summaryAccuracyElement.textContent = accuracy;
+    summaryAccuracyElement.textContent = accuracy + '%';
+    
+    // Show quiz title and hide stats display
+    document.getElementById('quiz-title').classList.remove('hidden');
+    document.getElementById('stats-display').classList.add('hidden');
     
     // Hide quiz container and show summary screen
     startScreenElement.classList.add('hidden');
@@ -562,6 +653,10 @@ function showSummary() {
 
 // Restart quiz
 function restartQuiz() {
+    // Show quiz title and hide stats display
+    document.getElementById('quiz-title').classList.remove('hidden');
+    document.getElementById('stats-display').classList.add('hidden');
+    
     // Show start screen
     startScreenElement.classList.remove('hidden');
     quizContainerElement.classList.add('hidden');
@@ -570,6 +665,10 @@ function restartQuiz() {
 
 // Go to home screen
 function goHome() {
+    // Show quiz title and hide stats display
+    document.getElementById('quiz-title').classList.remove('hidden');
+    document.getElementById('stats-display').classList.add('hidden');
+    
     // Show start screen and hide other screens
     startScreenElement.classList.remove('hidden');
     quizContainerElement.classList.add('hidden');
@@ -595,7 +694,19 @@ function updateMenuStats() {
 function toggleDarkMode() {
     isDarkMode = !isDarkMode;
     document.body.classList.toggle('dark-mode', isDarkMode);
-    darkModeToggle.textContent = isDarkMode ? '🌞' : '🌙';
+    
+    // Toggle visibility of sun and moon icons
+    const moonIcon = document.querySelector('.moon-icon');
+    const sunIcon = document.querySelector('.sun-icon');
+    
+    if (isDarkMode) {
+        moonIcon.classList.add('hidden');
+        sunIcon.classList.remove('hidden');
+    } else {
+        moonIcon.classList.remove('hidden');
+        sunIcon.classList.add('hidden');
+    }
+    
     localStorage.setItem('darkMode', isDarkMode);
 }
 
@@ -606,10 +717,64 @@ function loadPreferences() {
     if (savedDarkMode !== null) {
         isDarkMode = savedDarkMode === 'true';
         document.body.classList.toggle('dark-mode', isDarkMode);
-        darkModeToggle.textContent = isDarkMode ? '🌞' : '🌙';
+        
+        // Set correct icon visibility
+        const moonIcon = document.querySelector('.moon-icon');
+        const sunIcon = document.querySelector('.sun-icon');
+        
+        if (isDarkMode) {
+            moonIcon.classList.add('hidden');
+            sunIcon.classList.remove('hidden');
+        } else {
+            moonIcon.classList.remove('hidden');
+            sunIcon.classList.add('hidden');
+        }
     }
     
     // Load language preference removed as requested
+}
+
+// Check if device is mobile and hide menu-stats if needed
+function checkMobileAndHideStats() {
+    const menuStats = document.querySelector('.menu-stats');
+    if (!menuStats) return;
+    
+    if (window.innerWidth <= 480) {
+        menuStats.classList.add('hidden');
+    } else {
+        menuStats.classList.remove('hidden');
+    }
+}
+
+// Update the question count input based on sample questions
+function updateQuestionCountForSampleQuestions() {
+    if (typeof sampleQuestions !== 'undefined') {
+        const questionCount = sampleQuestions.length;
+        
+        // Update the question count input
+        if (questionCountElement) {
+            questionCountElement.max = questionCount;
+            
+            // Always set the value to 5 when changing to sample questions
+            questionCountElement.value = Math.min(5, questionCount);
+            selectedQuestionCount = parseInt(questionCountElement.value);
+            
+            // Update the slider value display
+            updateSliderValueDisplay();
+            
+            // Update the slider position
+            updateSliderValuePosition();
+            
+            // Update the max label
+            const sliderMaxLabel = document.getElementById('slider-max-label');
+            if (sliderMaxLabel) {
+                sliderMaxLabel.textContent = questionCount;
+            }
+            
+            // Update slider background
+            updateSliderBackground();
+        }
+    }
 }
 
 // Initialize the application when the DOM is loaded
